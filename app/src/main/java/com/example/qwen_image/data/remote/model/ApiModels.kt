@@ -1,0 +1,93 @@
+package com.example.qwen_image.data.remote.model
+
+// --- Sync request (qwen-image models) ---
+data class GenerationRequest(
+    val model: String,
+    val input: Input,
+    val parameters: Parameters
+)
+
+data class Input(
+    val messages: List<Message>? = null,
+    val prompt: String? = null
+)
+
+data class Message(
+    val role: String,
+    val content: List<ContentItem>
+)
+
+data class ContentItem(
+    val text: String? = null,
+    val image: String? = null
+)
+
+data class Parameters(
+    val size: String,
+    val n: Int = 1,
+    val negative_prompt: String? = null,
+    val prompt_extend: Boolean = true,
+    val watermark: Boolean = false
+)
+
+// --- Sync response (qwen-image models) ---
+data class GenerationResponse(
+    val output: Output?,
+    val request_id: String?,
+    val code: String?,
+    val message: String?
+)
+
+data class Output(
+    val choices: List<Choice>?,
+    val task_id: String?,
+    val task_status: String?,
+    val results: List<TaskResult>?
+)
+
+data class Choice(
+    val message: ResponseMessage?
+)
+
+data class ResponseMessage(
+    val content: List<ContentItem>?
+)
+
+// --- Async task (wan models) ---
+data class TaskSubmitRequest(
+    val model: String,
+    val input: TaskInput,
+    val parameters: TaskParameters
+)
+
+data class TaskInput(
+    val prompt: String
+)
+
+data class TaskParameters(
+    val size: String,
+    val n: Int = 1,
+    val seed: Int? = null
+)
+
+data class TaskSubmitResponse(
+    val request_id: String?,
+    val output: Output?,
+    val code: String?,
+    val message: String?
+)
+
+data class TaskStatusResponse(
+    val request_id: String?,
+    val output: Output?,
+    val code: String?,
+    val message: String?
+)
+
+data class TaskResult(
+    val url: String?,
+    val orig_url: String?,
+    val b64_image: String?
+)
+
+fun isWanModel(model: String): Boolean = model.startsWith("wan")

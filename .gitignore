@@ -1,0 +1,49 @@
+# Built outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration
+local.properties
+*.local
+
+# Android Studio
+/.idea/
+*.iml
+*.iws
+*.ipr
+/captures
+.externalNativeBuild
+.cxx
+
+# Signing
+*.jks
+*.keystore
+
+# macOS
+.DS_Store
+Thumbs.db
+
+# Kotlin
+*.kotlin_module
+
+# Claude Code
+.claude/
+
+# Environment
+.env
+.env.local
