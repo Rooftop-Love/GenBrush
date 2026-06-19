@@ -1,4 +1,4 @@
-﻿package com.example.genbrush.ui.gallery
+package com.example.genbrush.ui.gallery
 
 import android.content.ContentValues
 import android.content.Context
@@ -6,11 +6,14 @@ import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.genbrush.data.local.ImageEntry
 import com.example.genbrush.data.repository.GenerationRepository
+import com.example.genbrush.ui.localization.AppStrings
+import com.example.genbrush.ui.localization.LocalStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +25,8 @@ import java.io.File
 
 data class GalleryState(
     val images: List<ImageEntry> = emptyList(),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val pendingDelete: ImageEntry? = null
 )
 
 class GalleryViewModel(
@@ -44,20 +48,33 @@ class GalleryViewModel(
         }
     }
 
-    fun deleteImage(entry: ImageEntry) {
+    /** 请求删除（弹出确认对话框） */
+    fun requestDelete(entry: ImageEntry) {
+        _state.update { it.copy(pendingDelete = entry) }
+    }
+
+    /** 确认删除 */
+    fun confirmDelete() {
+        val entry = _state.value.pendingDelete ?: return
+        _state.update { it.copy(pendingDelete = null) }
         viewModelScope.launch {
             repository.deleteImage(entry)
             loadImages()
         }
     }
 
+    /** 取消删除 */
+    fun cancelDelete() {
+        _state.update { it.copy(pendingDelete = null) }
+    }
+
     fun saveToDeviceGallery(entry: ImageEntry, context: Context) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
+            val saved = withContext(Dispatchers.IO) {
                 val file = repository.getLocalImagePath(entry)
-                if (!file.exists()) return@withContext
+                if (!file.exists()) return@withContext false
 
-                val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return@withContext
+                val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return@withContext false
                 val fileName = "GenBrush_${entry.timestamp}.jpg"
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -85,6 +102,12 @@ class GalleryViewModel(
                     )
                 }
                 bitmap.recycle()
+                true
+            }
+            if (saved) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, AppStrings.ZH.commonSaved, Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

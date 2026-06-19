@@ -1,4 +1,4 @@
-﻿package com.example.genbrush.ui.gallery
+package com.example.genbrush.ui.gallery
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -9,14 +9,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,6 +28,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -43,6 +47,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import coil3.compose.AsyncImage
 import com.example.genbrush.ui.localization.LocalStrings
 import java.io.File
@@ -57,8 +63,27 @@ fun GalleryScreen(
     val context = LocalContext.current
     val s = LocalStrings.current
 
-    LaunchedEffect(Unit) {
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.loadImages()
+    }
+
+    // Delete confirmation dialog
+    state.pendingDelete?.let { pendingEntry ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelDelete() },
+            title = { Text(s.deleteConfirmTitle) },
+            text = { Text(s.deleteConfirmMessage) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmDelete() }) {
+                    Text(s.commonConfirm)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelDelete() }) {
+                    Text(s.commonCancel)
+                }
+            }
+        )
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -192,7 +217,7 @@ fun GalleryScreen(
                                 text = { Text(s.galleryDelete) },
                                 onClick = {
                                     showMenu = false
-                                    viewModel.deleteImage(entry)
+                                    viewModel.requestDelete(entry)
                                 }
                             )
                             DropdownMenuItem(

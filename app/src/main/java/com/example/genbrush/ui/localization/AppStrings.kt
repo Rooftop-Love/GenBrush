@@ -40,6 +40,15 @@ data class AppStrings(
     val galleryPromptCopied: String,
     val galleryShareTitle: String,
 
+    // Delete confirmation
+    val deleteConfirmTitle: String,
+    val deleteConfirmMessage: String,
+
+    // Common
+    val commonConfirm: String,
+    val commonCancel: String,
+    val commonSaved: String,
+
     // Full image viewer
     val viewerTitle: String,
     val viewerBack: String,
@@ -190,6 +199,11 @@ data class AppStrings(
             galleryCopyPrompt = "复制提示词",
             galleryPromptCopied = "提示词已复制",
             galleryShareTitle = "分享图片",
+            deleteConfirmTitle = "确认删除",
+            deleteConfirmMessage = "确定删除这张图片吗？此操作不可恢复。",
+            commonConfirm = "确认",
+            commonCancel = "取消",
+            commonSaved = "已保存",
             viewerTitle = "图片详情",
             viewerBack = "返回",
             viewerSave = "保存",
@@ -317,6 +331,11 @@ data class AppStrings(
             galleryCopyPrompt = "Copy Prompt",
             galleryPromptCopied = "Prompt copied",
             galleryShareTitle = "Share Image",
+            deleteConfirmTitle = "Confirm Delete",
+            deleteConfirmMessage = "Are you sure you want to delete this image? This cannot be undone.",
+            commonConfirm = "Confirm",
+            commonCancel = "Cancel",
+            commonSaved = "Saved",
             viewerTitle = "Image",
             viewerBack = "Back",
             viewerSave = "Save",

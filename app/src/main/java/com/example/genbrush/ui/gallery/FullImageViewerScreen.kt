@@ -1,6 +1,12 @@
-﻿package com.example.genbrush.ui.gallery
+package com.example.genbrush.ui.gallery
 
+import android.content.ContentValues
 import android.content.Intent
+import android.graphics.BitmapFactory
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.widget.Toast
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,11 +30,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -44,6 +53,7 @@ import androidx.core.content.FileProvider
 import coil3.compose.AsyncImage
 import com.example.genbrush.data.local.ImageEntry
 import com.example.genbrush.data.repository.GenerationRepository
+import com.example.genbrush.ui.localization.AppStrings
 import com.example.genbrush.ui.localization.LocalStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -72,6 +82,35 @@ fun FullImageViewerScreen(
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // Delete confirmation dialog
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text(s.deleteConfirmTitle) },
+            text = { Text(s.deleteConfirmMessage) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    val currentEntry = entry
+                    if (currentEntry != null) {
+                        coroutineScope.launch(Dispatchers.IO) {
+                            repository.deleteImage(currentEntry)
+                            withContext(Dispatchers.Main) { onBack() }
+                        }
+                    }
+                }) {
+                    Text(s.commonConfirm)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text(s.commonCancel)
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -116,16 +155,42 @@ fun FullImageViewerScreen(
                 ) {
                     OutlinedButton(onClick = {
                         coroutineScope.launch(Dispatchers.IO) {
-                            android.graphics.BitmapFactory.decodeFile(currentFile.absolutePath)?.let { bitmap ->
-                                withContext(Dispatchers.Main) {
-                                    android.provider.MediaStore.Images.Media.insertImage(
+                            val bitmap = BitmapFactory.decodeFile(currentFile.absolutePath)
+                            if (bitmap != null) {
+                                val fileName = "GenBrush_${currentEntry.timestamp}.jpg"
+                                var saved = false
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    val contentValues = ContentValues().apply {
+                                        put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                                        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/GenBrush")
+                                    }
+                                    val uri = context.contentResolver.insert(
+                                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                        contentValues
+                                    )
+                                    uri?.let {
+                                        context.contentResolver.openOutputStream(it)?.use { out ->
+                                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                                        }
+                                        saved = true
+                                    }
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    MediaStore.Images.Media.insertImage(
                                         context.contentResolver,
                                         bitmap,
-                                        "GenBrush_${currentEntry.timestamp}",
-                                        currentEntry.prompt
+                                        fileName,
+                                        "由 GenBrush 生成：${currentEntry.prompt}"
                                     )
+                                    saved = true
                                 }
                                 bitmap.recycle()
+                                if (saved) {
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, AppStrings.ZH.commonSaved, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             }
                         }
                     }) {
@@ -151,10 +216,7 @@ fun FullImageViewerScreen(
                         Text(s.viewerShare)
                     }
                     OutlinedButton(onClick = {
-                        coroutineScope.launch(Dispatchers.IO) {
-                            repository.deleteImage(currentEntry)
-                            withContext(Dispatchers.Main) { onBack() }
-                        }
+                        showDeleteDialog = true
                     }) {
                         Icon(Icons.Default.Delete, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
