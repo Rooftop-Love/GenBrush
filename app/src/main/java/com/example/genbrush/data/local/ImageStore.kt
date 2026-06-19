@@ -143,6 +143,11 @@ class ImageStore(private val context: Context) {
         dao.deleteById(entry.id)
     }
 
+    suspend fun setFavorite(id: String, favorite: Boolean) = withContext(Dispatchers.IO) {
+        ensureMigrated()
+        dao.setFavorite(id, favorite)
+    }
+
     /**
      * 导入历史条目（用于数据迁移 zip 导入），跳过已存在的 id。
      * 调用方需保证对应的图片文件已拷贝到 [imageDir]。

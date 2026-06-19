@@ -13,7 +13,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.genbrush.data.local.ImageEntry
 import com.example.genbrush.data.repository.GenerationRepository
 import com.example.genbrush.ui.localization.AppStrings
-import com.example.genbrush.ui.localization.LocalStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +25,8 @@ import java.io.File
 data class GalleryState(
     val images: List<ImageEntry> = emptyList(),
     val isLoading: Boolean = true,
-    val pendingDelete: ImageEntry? = null
+    val pendingDelete: ImageEntry? = null,
+    val showFavoritesOnly: Boolean = false
 )
 
 class GalleryViewModel(
@@ -66,6 +66,25 @@ class GalleryViewModel(
     /** 取消删除 */
     fun cancelDelete() {
         _state.update { it.copy(pendingDelete = null) }
+    }
+
+    /** 切换收藏状态 */
+    fun toggleFavorite(entry: ImageEntry) {
+        viewModelScope.launch {
+            repository.setFavorite(entry.id, !entry.isFavorite)
+            loadImages()
+        }
+    }
+
+    /** 切换收藏筛选 */
+    fun toggleFavoriteFilter() {
+        _state.update { it.copy(showFavoritesOnly = !it.showFavoritesOnly) }
+    }
+
+    /** 当前展示的图片列表（受筛选影响） */
+    fun displayedImages(): List<ImageEntry> {
+        val s = _state.value
+        return if (s.showFavoritesOnly) s.images.filter { it.isFavorite } else s.images
     }
 
     fun saveToDeviceGallery(entry: ImageEntry, context: Context) {

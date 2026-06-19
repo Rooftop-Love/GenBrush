@@ -3,7 +3,9 @@ package com.example.genbrush.ui.gallery
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,10 +17,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,13 +33,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +50,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,7 +58,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coil3.compose.AsyncImage
 import com.example.genbrush.ui.localization.LocalStrings
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -86,9 +92,21 @@ fun GalleryScreen(
         )
     }
 
+    val displayedImages = viewModel.displayedImages()
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(s.galleryTitle) },
+            actions = {
+                IconButton(onClick = { viewModel.toggleFavoriteFilter() }) {
+                    Icon(
+                        imageVector = if (state.showFavoritesOnly) Icons.Filled.Star else Icons.Outlined.Star,
+                        contentDescription = s.galleryShowFavorites,
+                        tint = if (state.showFavoritesOnly) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surface
             )
@@ -101,14 +119,14 @@ fun GalleryScreen(
             ) {
                 CircularProgressIndicator()
             }
-        } else if (state.images.isEmpty()) {
+        } else if (displayedImages.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        s.galleryEmpty,
+                        if (state.showFavoritesOnly) s.galleryEmpty else s.galleryEmpty,
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -126,7 +144,7 @@ fun GalleryScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(state.images, key = { it.id }) { entry ->
+                items(displayedImages, key = { it.id }) { entry ->
                     var showMenu by remember { mutableStateOf(false) }
                     val file = remember(entry) { viewModel.getLocalImagePath(entry) }
 
@@ -166,6 +184,24 @@ fun GalleryScreen(
                                     }
                                 }
 
+                                // Favorite badge
+                                if (entry.isFavorite) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Star,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(6.dp)
+                                            .size(20.dp)
+                                            .background(
+                                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                                shape = CircleShape
+                                            )
+                                            .padding(2.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -187,6 +223,13 @@ fun GalleryScreen(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
+                            DropdownMenuItem(
+                                text = { Text(if (entry.isFavorite) s.galleryUnfavorite else s.galleryFavorite) },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.toggleFavorite(entry)
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text(s.gallerySave) },
                                 onClick = {

@@ -22,6 +22,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -136,6 +138,25 @@ fun FullImageViewerScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.viewerBack)
+                    }
+                },
+                actions = {
+                    val currentEntry = entry
+                    if (currentEntry != null) {
+                        IconButton(onClick = {
+                            coroutineScope.launch {
+                                repository.setFavorite(currentEntry.id, !currentEntry.isFavorite)
+                                // Refresh entry
+                                // produceState won't auto-refresh, so we trigger via re-keying
+                            }
+                        }) {
+                            Icon(
+                                imageVector = if (currentEntry.isFavorite) Icons.Filled.Star else Icons.Outlined.Star,
+                                contentDescription = if (currentEntry.isFavorite) s.galleryUnfavorite else s.galleryFavorite,
+                                tint = if (currentEntry.isFavorite) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

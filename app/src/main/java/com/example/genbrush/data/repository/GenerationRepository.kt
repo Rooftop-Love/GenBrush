@@ -319,6 +319,8 @@ class GenerationRepository(
 
     suspend fun deleteImage(entry: ImageEntry) = imageStore.deleteImage(entry)
 
+    suspend fun setFavorite(id: String, favorite: Boolean) = imageStore.setFavorite(id, favorite)
+
     private suspend fun encodeImageToBase64(uri: Uri, context: Context): String =
         withContext(Dispatchers.IO) {
             val inputStream = context.contentResolver.openInputStream(uri)
