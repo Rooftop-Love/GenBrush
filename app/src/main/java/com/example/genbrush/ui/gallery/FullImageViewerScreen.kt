@@ -85,8 +85,9 @@ fun FullImageViewerScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         entry?.let {
+                            val sizeLabel = it.size ?: "—"
                             Text(
-                                "${it.model} | ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(it.timestamp))}",
+                                "${it.model} | $sizeLabel | ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(it.timestamp))}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

@@ -89,7 +89,9 @@ class GenerationRepository(
                         fileName = fileName,
                         prompt = prompt,
                         model = "SD Forge (local)",
-                        type = "text_to_image"
+                        type = "text_to_image",
+                        size = size,
+                        negativePrompt = negativePrompt
                     )
                     Result.success(imageStore.saveImageFromBytes(imageBytes, entry))
                 } catch (e: Exception) {
@@ -135,7 +137,8 @@ class GenerationRepository(
                         fileName = fileName,
                         prompt = prompt,
                         model = "SD Forge (local)",
-                        type = "image_edit"
+                        type = "image_edit",
+                        size = size
                     )
                     Result.success(imageStore.saveImageFromBytes(imageBytes, entry))
                 } catch (e: Exception) {
@@ -197,7 +200,9 @@ class GenerationRepository(
                         fileName = fileName,
                         prompt = prompt,
                         model = model,
-                        type = "text_to_image"
+                        type = "text_to_image",
+                        size = size,
+                        negativePrompt = negativePrompt
                     )
                     Result.success(imageStore.saveImageFromUrl(imageUrl, entry))
                 } catch (e: Exception) {
@@ -237,7 +242,8 @@ class GenerationRepository(
                         fileName = fileName,
                         prompt = prompt,
                         model = model,
-                        type = "text_to_image"
+                        type = "text_to_image",
+                        size = size
                     )
                     Result.success(imageStore.saveImageFromUrl(imageUrl, entry))
                 } catch (e: Exception) {
@@ -289,7 +295,8 @@ class GenerationRepository(
                         fileName = fileName,
                         prompt = prompt,
                         model = model,
-                        type = "image_edit"
+                        type = "image_edit",
+                        size = size
                     )
                     Result.success(imageStore.saveImageFromUrl(imageUrl, entry))
                 } catch (e: Exception) {
