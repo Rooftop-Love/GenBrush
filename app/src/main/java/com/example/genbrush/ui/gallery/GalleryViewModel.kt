@@ -22,11 +22,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+enum class SortMode { TIME_DESC, TIME_ASC, FAVORITE_FIRST }
+
 data class GalleryState(
     val images: List<ImageEntry> = emptyList(),
     val isLoading: Boolean = true,
     val pendingDelete: ImageEntry? = null,
-    val showFavoritesOnly: Boolean = false
+    val showFavoritesOnly: Boolean = false,
+    val searchQuery: String = "",
+    val typeFilter: String? = null, // null = all, "text_to_image", "image_edit"
+    val sortMode: SortMode = SortMode.TIME_DESC
 )
 
 class GalleryViewModel(
@@ -81,10 +86,52 @@ class GalleryViewModel(
         _state.update { it.copy(showFavoritesOnly = !it.showFavoritesOnly) }
     }
 
-    /** 当前展示的图片列表（受筛选影响） */
+    /** 更新搜索关键词 */
+    fun updateSearchQuery(query: String) {
+        _state.update { it.copy(searchQuery = query) }
+    }
+
+    /** 更新类型筛选 */
+    fun updateTypeFilter(type: String?) {
+        _state.update { it.copy(typeFilter = type) }
+    }
+
+    /** 更新排序模式 */
+    fun updateSortMode(mode: SortMode) {
+        _state.update { it.copy(sortMode = mode) }
+    }
+
+    /** 当前展示的图片列表（受搜索/筛选/排序影响） */
     fun displayedImages(): List<ImageEntry> {
         val s = _state.value
-        return if (s.showFavoritesOnly) s.images.filter { it.isFavorite } else s.images
+        var list = s.images
+
+        // 收藏筛选
+        if (s.showFavoritesOnly) {
+            list = list.filter { it.isFavorite }
+        }
+
+        // 类型筛选
+        if (s.typeFilter != null) {
+            list = list.filter { it.type == s.typeFilter }
+        }
+
+        // 搜索
+        if (s.searchQuery.isNotBlank()) {
+            val q = s.searchQuery.trim().lowercase()
+            list = list.filter { it.prompt.lowercase().contains(q) }
+        }
+
+        // 排序
+        list = when (s.sortMode) {
+            SortMode.TIME_DESC -> list.sortedByDescending { it.timestamp }
+            SortMode.TIME_ASC -> list.sortedBy { it.timestamp }
+            SortMode.FAVORITE_FIRST -> list.sortedWith(
+                compareByDescending<ImageEntry> { it.isFavorite }.thenByDescending { it.timestamp }
+            )
+        }
+
+        return list
     }
 
     fun saveToDeviceGallery(entry: ImageEntry, context: Context) {

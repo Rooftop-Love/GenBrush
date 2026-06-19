@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,12 +19,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
@@ -33,9 +40,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -68,6 +78,7 @@ fun GalleryScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val s = LocalStrings.current
+    var showSortMenu by remember { mutableStateOf(false) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.loadImages()
@@ -98,6 +109,34 @@ fun GalleryScreen(
         TopAppBar(
             title = { Text(s.galleryTitle) },
             actions = {
+                // Sort button
+                Box {
+                    IconButton(onClick = { showSortMenu = true }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Sort,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showSortMenu,
+                        onDismissRequest = { showSortMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(s.gallerySortNewest) },
+                            onClick = { viewModel.updateSortMode(SortMode.TIME_DESC); showSortMenu = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(s.gallerySortOldest) },
+                            onClick = { viewModel.updateSortMode(SortMode.TIME_ASC); showSortMenu = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(s.gallerySortFavFirst) },
+                            onClick = { viewModel.updateSortMode(SortMode.FAVORITE_FIRST); showSortMenu = false }
+                        )
+                    }
+                }
+                // Favorite filter
                 IconButton(onClick = { viewModel.toggleFavoriteFilter() }) {
                     Icon(
                         imageVector = if (state.showFavoritesOnly) Icons.Filled.Star else Icons.Outlined.Star,
@@ -111,6 +150,54 @@ fun GalleryScreen(
                 containerColor = MaterialTheme.colorScheme.surface
             )
         )
+
+        // Search bar
+        OutlinedTextField(
+            value = state.searchQuery,
+            onValueChange = { viewModel.updateSearchQuery(it) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            placeholder = { Text(s.gallerySearchHint) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                if (state.searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                        Icon(Icons.Default.Close, contentDescription = null)
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        // Type filter chips
+        LazyRow(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                FilterChip(
+                    selected = state.typeFilter == null,
+                    onClick = { viewModel.updateTypeFilter(null) },
+                    label = { Text(s.galleryFilterAll) }
+                )
+            }
+            item {
+                FilterChip(
+                    selected = state.typeFilter == "text_to_image",
+                    onClick = { viewModel.updateTypeFilter("text_to_image") },
+                    label = { Text(s.galleryFilterTxt2img) }
+                )
+            }
+            item {
+                FilterChip(
+                    selected = state.typeFilter == "image_edit",
+                    onClick = { viewModel.updateTypeFilter("image_edit") },
+                    label = { Text(s.galleryFilterEdit) }
+                )
+            }
+        }
 
         if (state.isLoading) {
             Box(
@@ -126,7 +213,7 @@ fun GalleryScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        if (state.showFavoritesOnly) s.galleryEmpty else s.galleryEmpty,
+                        s.galleryEmpty,
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
