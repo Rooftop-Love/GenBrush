@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Qwen_Image is an Android app built with Jetpack Compose and Kotlin. It is currently a fresh project from the Android Studio template, with the package `com.example.qwen_image`.
+GenBrush is an Android app for AI image generation and editing, built with Jetpack Compose and Kotlin. It supports dual backends: DashScope (Alibaba Cloud) and SD WebUI Forge (local). Package: `com.example.genbrush`.
 
 ## Build & Run
 
@@ -19,7 +19,7 @@ Qwen_Image is an Android app built with Jetpack Compose and Kotlin. It is curren
 ./gradlew test
 
 # Run a single unit test class
-./gradlew testDebugUnitTest --tests "com.example.qwen_image.ExampleUnitTest"
+./gradlew testDebugUnitTest --tests "com.example.genbrush.ExampleUnitTest"
 
 # Run instrumented (on-device) tests
 ./gradlew connectedAndroidTest
@@ -34,6 +34,9 @@ On Windows, use `gradlew.bat` instead of `./gradlew`.
 
 - **Language**: Kotlin (2.2.10)
 - **UI**: Jetpack Compose with Material 3 (BOM 2026.02.01)
+- **Networking**: OkHttp + Gson
+- **Image Loading**: Coil 3
+- **Local Storage**: Room + EncryptedSharedPreferences
 - **Build**: Gradle 9.4.1, AGP 9.2.1, Kotlin DSL build scripts
 - **Min SDK**: 24 (Android 7.0), **Target/Compile SDK**: 36
 - **Dependency catalog**: `gradle/libs.versions.toml` (version catalog)
@@ -41,12 +44,14 @@ On Windows, use `gradlew.bat` instead of `./gradlew`.
 ## Architecture
 
 - Single-module Gradle project (`app`)
+- MVVM with Repository pattern, dual-backend dispatch (DashScope / SD WebUI)
 - `MainActivity` is the entry point, using `ComponentActivity` with Compose `setContent`
-- Theme: `Qwen_ImageTheme` in `ui/theme/` with dynamic color support (Android 12+)
-- All source lives under `app/src/main/java/com/example/qwen_image/`
+- `GenBrushApp` (Application) initializes HTTP clients and dependencies
+- Theme: `GenBrushTheme` in `ui/theme/` with dynamic color support (Android 12+)
+- All source lives under `app/src/main/java/com/example/genbrush/`
 
 ## Key Conventions
 
 - Build scripts use Kotlin DSL (`.gradle.kts`) with version catalog aliases from `libs.versions.toml`
 - Compose dependencies are managed via the Compose BOM — do not pin individual Compose library versions
-- ProGuard/R8 minification is disabled for release builds by default
+- ProGuard/R8 minification is enabled for release builds; keep rules in `app/proguard-rules.pro`

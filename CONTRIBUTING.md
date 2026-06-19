@@ -1,11 +1,11 @@
-# Contributing to Qwen Image
+# Contributing to GenBrush
 
 Thank you for your interest in contributing! This guide will help you get started.
 
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/Rooftop-Love/qwen_image.git`
+2. Clone your fork: `git clone https://github.com/Rooftop-Love/genbrush.git`
 3. Create a branch: `git checkout -b feature/your-feature-name`
 4. Make your changes
 5. Push and create a Pull Request
@@ -44,7 +44,7 @@ refactor: extract common UI components
 
 ## Reporting Bugs
 
-Use the [Bug Report](https://github.com/Rooftop-Love/qwen_image/issues/new?template=bug_report.md) template. Include:
+Use the [Bug Report](https://github.com/Rooftop-Love/genbrush/issues/new?template=bug_report.md) template. Include:
 
 - Device model and Android version
 - Steps to reproduce
@@ -53,7 +53,7 @@ Use the [Bug Report](https://github.com/Rooftop-Love/qwen_image/issues/new?templ
 
 ## Feature Requests
 
-Use the [Feature Request](https://github.com/Rooftop-Love/qwen_image/issues/new?template=feature_request.md) template.
+Use the [Feature Request](https://github.com/Rooftop-Love/genbrush/issues/new?template=feature_request.md) template.
 
 ## License
 
