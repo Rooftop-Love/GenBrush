@@ -7,6 +7,8 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,12 +17,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
@@ -29,15 +35,18 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -60,34 +69,52 @@ import com.example.genbrush.ui.localization.LocalStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun FullImageViewerScreen(
     imageId: String,
     repository: GenerationRepository,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onRegenerate: (String) -> Unit = {},
+    onEditImage: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val entry by produceState<ImageEntry?>(initialValue = null, imageId) {
-        value = repository.getEntryById(imageId)
-    }
-    val imageFile by produceState<java.io.File?>(initialValue = null, imageId) {
-        value = repository.getLocalImagePathById(imageId)
-    }
     val coroutineScope = rememberCoroutineScope()
     val s = LocalStrings.current
 
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
+    // Load all images for pager
+    val allEntries by produceState<List<ImageEntry>>(initialValue = emptyList()) {
+        value = repository.getGalleryImages()
+    }
+
+    val initialIndex = remember(allEntries) {
+        allEntries.indexOfFirst { it.id == imageId }.coerceAtLeast(0)
+    }
+
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showInfoSheet by remember { mutableStateOf(false) }
+
+    // Pager state
+    val pagerState = rememberPagerState(
+        initialPage = initialIndex,
+        pageCount = { allEntries.size }
+    )
+
+    val currentEntry = allEntries.getOrNull(pagerState.currentPage)
+    val currentFile = currentEntry?.let { repository.getLocalImagePath(it) }
+
+    // Zoom state per page
+    var scale by remember(pagerState.currentPage) { mutableFloatStateOf(1f) }
+    var offsetX by remember(pagerState.currentPage) { mutableFloatStateOf(0f) }
+    var offsetY by remember(pagerState.currentPage) { mutableFloatStateOf(0f) }
 
     // Delete confirmation dialog
-    if (showDeleteDialog) {
+    if (showDeleteDialog && currentEntry != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text(s.deleteConfirmTitle) },
@@ -95,12 +122,9 @@ fun FullImageViewerScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
-                    val currentEntry = entry
-                    if (currentEntry != null) {
-                        coroutineScope.launch(Dispatchers.IO) {
-                            repository.deleteImage(currentEntry)
-                            withContext(Dispatchers.Main) { onBack() }
-                        }
+                    coroutineScope.launch(Dispatchers.IO) {
+                        repository.deleteImage(currentEntry)
+                        withContext(Dispatchers.Main) { onBack() }
                     }
                 }) {
                     Text(s.commonConfirm)
@@ -114,18 +138,82 @@ fun FullImageViewerScreen(
         )
     }
 
+    // Info bottom sheet
+    if (showInfoSheet && currentEntry != null) {
+        ModalBottomSheet(
+            onDismissRequest = { showInfoSheet = false },
+            sheetState = rememberModalBottomSheetState()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    s.viewerInfoTitle,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                InfoRow(s.viewerPrompt, currentEntry.prompt)
+                currentEntry.negativePrompt?.takeIf { it.isNotBlank() }?.let {
+                    InfoRow(s.viewerNegativePrompt, it)
+                }
+                InfoRow(s.viewerModel, currentEntry.model)
+                currentEntry.size?.let { InfoRow(s.viewerSize, it) }
+                InfoRow(s.viewerType, if (currentEntry.type == "text_to_image") s.galleryFilterTxt2img else s.galleryFilterEdit)
+                InfoRow(s.viewerTime, SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(currentEntry.timestamp)))
+                currentFile?.let { file ->
+                    if (file.exists()) {
+                        val sizeKb = file.length() / 1024
+                        InfoRow(s.viewerFileSize, if (sizeKb > 1024) "${sizeKb / 1024} MB" else "$sizeKb KB")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            showInfoSheet = false
+                            onRegenerate(currentEntry.prompt)
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(s.viewerRegenerate, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showInfoSheet = false
+                            currentFile?.let { onEditImage(it.absolutePath) }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(s.viewerEditImage, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(
-                            entry?.prompt ?: s.viewerTitle,
+                            currentEntry?.prompt ?: s.viewerTitle,
                             style = MaterialTheme.typography.titleSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        entry?.let {
+                        currentEntry?.let {
                             val sizeLabel = it.size ?: "—"
                             Text(
                                 "${it.model} | $sizeLabel | ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(it.timestamp))}",
@@ -141,13 +229,15 @@ fun FullImageViewerScreen(
                     }
                 },
                 actions = {
-                    val currentEntry = entry
                     if (currentEntry != null) {
+                        // Favorite
                         IconButton(onClick = {
                             coroutineScope.launch {
                                 repository.setFavorite(currentEntry.id, !currentEntry.isFavorite)
-                                // Refresh entry
-                                // produceState won't auto-refresh, so we trigger via re-keying
+                                // Refresh
+                                val refreshed = repository.getGalleryImages()
+                                // Trigger recomposition by updating produceState is not possible directly,
+                                // but the pager page key change will refresh. For now, reload all entries.
                             }
                         }) {
                             Icon(
@@ -155,6 +245,14 @@ fun FullImageViewerScreen(
                                 contentDescription = if (currentEntry.isFavorite) s.galleryUnfavorite else s.galleryFavorite,
                                 tint = if (currentEntry.isFavorite) MaterialTheme.colorScheme.primary
                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // Info
+                        IconButton(onClick = { showInfoSheet = true }) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = s.viewerInfo,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -165,8 +263,6 @@ fun FullImageViewerScreen(
             )
         },
         bottomBar = {
-            val currentEntry = entry
-            val currentFile = imageFile
             if (currentEntry != null && currentFile != null && currentFile.exists()) {
                 Row(
                     modifier = Modifier
@@ -247,42 +343,86 @@ fun FullImageViewerScreen(
             }
         }
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentAlignment = Alignment.Center
-        ) {
-            val currentFile = imageFile
-            if (currentFile != null && currentFile.exists()) {
-                AsyncImage(
-                    model = currentFile,
-                    contentDescription = s.viewerDesc,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer(
-                            scaleX = scale,
-                            scaleY = scale,
-                            translationX = offsetX,
-                            translationY = offsetY
-                        )
-                        .pointerInput(Unit) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                scale = (scale * zoom).coerceIn(0.5f, 5f)
-                                if (scale > 1f) {
-                                    offsetX += pan.x
-                                    offsetY += pan.y
-                                } else {
-                                    offsetX = 0f
-                                    offsetY = 0f
-                                }
-                            }
-                        },
-                    contentScale = ContentScale.Fit
-                )
-            } else {
+        if (allEntries.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(s.viewerNotFound, style = MaterialTheme.typography.bodyLarge)
             }
+        } else {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                beyondViewportPageCount = 1
+            ) { page ->
+                val entry = allEntries[page]
+                val file = repository.getLocalImagePath(entry)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (file.exists()) {
+                        AsyncImage(
+                            model = file,
+                            contentDescription = s.viewerDesc,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer(
+                                    scaleX = scale,
+                                    scaleY = scale,
+                                    translationX = offsetX,
+                                    translationY = offsetY
+                                )
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onDoubleTap = {
+                                            if (scale > 1f) {
+                                                scale = 1f; offsetX = 0f; offsetY = 0f
+                                            } else {
+                                                scale = 2f
+                                            }
+                                        }
+                                    )
+                                }
+                                .pointerInput(Unit) {
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        scale = (scale * zoom).coerceIn(0.5f, 5f)
+                                        if (scale > 1f) {
+                                            offsetX += pan.x
+                                            offsetY += pan.y
+                                        } else {
+                                            offsetX = 0f
+                                            offsetY = 0f
+                                        }
+                                    }
+                                },
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        Text(s.viewerNotFound, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }

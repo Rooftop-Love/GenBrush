@@ -125,7 +125,23 @@ fun AppNavigation(
                     FullImageViewerScreen(
                         imageId = imageId,
                         repository = repository,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        onRegenerate = { prompt ->
+                            navController.previousBackStackEntry
+                                ?.savedStateHandle
+                                ?.set("regenerate_prompt", prompt)
+                            navController.navigate(Screen.TextToImage.route) {
+                                popUpTo(Screen.TextToImage.route) { inclusive = true }
+                            }
+                        },
+                        onEditImage = { imagePath ->
+                            navController.previousBackStackEntry
+                                ?.savedStateHandle
+                                ?.set("edit_image_path", imagePath)
+                            navController.navigate(Screen.ImageEdit.route) {
+                                popUpTo(Screen.ImageEdit.route) { inclusive = true }
+                            }
+                        }
                     )
                 }
             }
