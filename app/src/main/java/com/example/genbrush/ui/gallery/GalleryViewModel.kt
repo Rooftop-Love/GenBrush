@@ -31,7 +31,9 @@ data class GalleryState(
     val showFavoritesOnly: Boolean = false,
     val searchQuery: String = "",
     val typeFilter: String? = null, // null = all, "text_to_image", "image_edit"
-    val sortMode: SortMode = SortMode.TIME_DESC
+    val sortMode: SortMode = SortMode.TIME_DESC,
+    val selectionMode: Boolean = false,
+    val selectedIds: Set<String> = emptySet()
 )
 
 class GalleryViewModel(
@@ -100,6 +102,67 @@ class GalleryViewModel(
     fun updateSortMode(mode: SortMode) {
         _state.update { it.copy(sortMode = mode) }
     }
+
+    // ==================== Multi-select ====================
+
+    /** 长按进入多选模式并选中第一项 */
+    fun enterSelectionMode(id: String) {
+        _state.update { it.copy(selectionMode = true, selectedIds = setOf(id)) }
+    }
+
+    /** 多选模式下切换选中/取消 */
+    fun toggleSelection(id: String) {
+        _state.update { s ->
+            val newSet = if (id in s.selectedIds) s.selectedIds - id else s.selectedIds + id
+            if (newSet.isEmpty()) s.copy(selectionMode = false, selectedIds = emptySet())
+            else s.copy(selectedIds = newSet)
+        }
+    }
+
+    /** 全选当前筛选结果 */
+    fun selectAll() {
+        val ids = displayedImages().map { it.id }.toSet()
+        _state.update { it.copy(selectedIds = ids) }
+    }
+
+    /** 退出多选模式 */
+    fun exitSelectionMode() {
+        _state.update { it.copy(selectionMode = false, selectedIds = emptySet()) }
+    }
+
+    /** 批量删除（弹确认） */
+    fun requestBatchDelete() {
+        // Reuse pendingDelete to trigger the same dialog; we'll handle batch in confirmBatchDelete
+        _state.update { it.copy(pendingDelete = ImageEntry(id = "__batch__", fileName = "", prompt = "", model = "", type = "")) }
+    }
+
+    fun isBatchDeletePending(): Boolean {
+        return _state.value.pendingDelete?.id == "__batch__"
+    }
+
+    /** 确认批量删除 */
+    fun confirmBatchDelete() {
+        val ids = _state.value.selectedIds.toList()
+        _state.update { it.copy(pendingDelete = null, selectionMode = false, selectedIds = emptySet()) }
+        viewModelScope.launch {
+            ids.forEach { id ->
+                repository.getEntryById(id)?.let { repository.deleteImage(it) }
+            }
+            loadImages()
+        }
+    }
+
+    /** 批量收藏 */
+    fun batchFavorite() {
+        val ids = _state.value.selectedIds.toList()
+        _state.update { it.copy(selectionMode = false, selectedIds = emptySet()) }
+        viewModelScope.launch {
+            ids.forEach { id -> repository.setFavorite(id, true) }
+            loadImages()
+        }
+    }
+
+    // ==================== Display ====================
 
     /** 当前展示的图片列表（受搜索/筛选/排序影响） */
     fun displayedImages(): List<ImageEntry> {
