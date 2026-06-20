@@ -1,6 +1,13 @@
 ﻿package com.example.genbrush.ui.common
 
+import com.example.genbrush.data.remote.DashScopeException
+
 fun mapError(e: Throwable): String {
+    // DashScope API 错误：直接展示 API 返回的错误码和消息
+    if (e is DashScopeException) {
+        return "[${ e.code }] ${e.message}"
+    }
+
     val msg = e.message ?: "未知错误"
     return when {
         msg.contains("API key", ignoreCase = true) -> msg

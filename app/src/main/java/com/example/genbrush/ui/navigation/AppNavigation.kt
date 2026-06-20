@@ -19,6 +19,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.genbrush.data.local.ImageEntry
 import com.example.genbrush.data.local.PreferencesManager
 import com.example.genbrush.data.remote.StableDiffusionApi
 import com.example.genbrush.data.repository.GenerationRepository
@@ -126,10 +127,15 @@ fun AppNavigation(
                         imageId = imageId,
                         repository = repository,
                         onBack = { navController.popBackStack() },
-                        onRegenerate = { prompt ->
+                        onRegenerate = { entry ->
                             navController.previousBackStackEntry
                                 ?.savedStateHandle
-                                ?.set("regenerate_prompt", prompt)
+                                ?.apply {
+                                    set("regenerate_prompt", entry.prompt)
+                                    set("regenerate_model", entry.model)
+                                    set("regenerate_size", entry.size)
+                                    set("regenerate_negative_prompt", entry.negativePrompt)
+                                }
                             navController.navigate(Screen.TextToImage.route) {
                                 popUpTo(Screen.TextToImage.route) { inclusive = true }
                             }

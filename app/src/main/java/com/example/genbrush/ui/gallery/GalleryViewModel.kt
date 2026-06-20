@@ -6,13 +6,11 @@ import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.genbrush.data.local.ImageEntry
 import com.example.genbrush.data.repository.GenerationRepository
-import com.example.genbrush.ui.localization.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,8 +31,16 @@ data class GalleryState(
     val typeFilter: String? = null, // null = all, "text_to_image", "image_edit"
     val sortMode: SortMode = SortMode.TIME_DESC,
     val selectionMode: Boolean = false,
-    val selectedIds: Set<String> = emptySet()
+    val selectedIds: Set<String> = emptySet(),
+    val displayedImages: List<ImageEntry> = emptyList(),
+    val saveResult: SaveResult? = null // Bug #12: one-shot event for UI toast
 )
+
+/** One-shot save result for UI to observe and show toast */
+sealed class SaveResult {
+    data object Success : SaveResult()
+    data class Error(val message: String) : SaveResult()
+}
 
 class GalleryViewModel(
     private val repository: GenerationRepository
@@ -49,9 +55,15 @@ class GalleryViewModel(
 
     fun loadImages() {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
+            val isFirstLoad = _state.value.images.isEmpty()
+            if (isFirstLoad) {
+                _state.update { it.copy(isLoading = true) }
+            }
             val images = repository.getGalleryImages()
-            _state.update { it.copy(images = images, isLoading = false) }
+            _state.update { newState ->
+                val updated = newState.copy(images = images, isLoading = false)
+                updated.copy(displayedImages = computeDisplayedImages(updated))
+            }
         }
     }
 
@@ -85,29 +97,41 @@ class GalleryViewModel(
 
     /** 切换收藏筛选 */
     fun toggleFavoriteFilter() {
-        _state.update { it.copy(showFavoritesOnly = !it.showFavoritesOnly) }
+        _state.update { s ->
+            val updated = s.copy(showFavoritesOnly = !s.showFavoritesOnly)
+            updated.copy(displayedImages = computeDisplayedImages(updated))
+        }
     }
 
     /** 更新搜索关键词 */
     fun updateSearchQuery(query: String) {
-        _state.update { it.copy(searchQuery = query) }
+        _state.update { s ->
+            val updated = s.copy(searchQuery = query)
+            updated.copy(displayedImages = computeDisplayedImages(updated))
+        }
     }
 
     /** 更新类型筛选 */
     fun updateTypeFilter(type: String?) {
-        _state.update { it.copy(typeFilter = type) }
+        _state.update { s ->
+            val updated = s.copy(typeFilter = type)
+            updated.copy(displayedImages = computeDisplayedImages(updated))
+        }
     }
 
     /** 更新排序模式 */
     fun updateSortMode(mode: SortMode) {
-        _state.update { it.copy(sortMode = mode) }
+        _state.update { s ->
+            val updated = s.copy(sortMode = mode)
+            updated.copy(displayedImages = computeDisplayedImages(updated))
+        }
     }
 
     // ==================== Multi-select ====================
 
-    /** 长按进入多选模式并选中第一项 */
-    fun enterSelectionMode(id: String) {
-        _state.update { it.copy(selectionMode = true, selectedIds = setOf(id)) }
+    /** 长按或点右上角进入多选模式，id=null 时不预选任何项 */
+    fun enterSelectionMode(id: String?) {
+        _state.update { it.copy(selectionMode = true, selectedIds = if (id != null) setOf(id) else emptySet()) }
     }
 
     /** 多选模式下切换选中/取消 */
@@ -121,7 +145,7 @@ class GalleryViewModel(
 
     /** 全选当前筛选结果 */
     fun selectAll() {
-        val ids = displayedImages().map { it.id }.toSet()
+        val ids = _state.value.displayedImages.map { it.id }.toSet()
         _state.update { it.copy(selectedIds = ids) }
     }
 
@@ -132,7 +156,6 @@ class GalleryViewModel(
 
     /** 批量删除（弹确认） */
     fun requestBatchDelete() {
-        // Reuse pendingDelete to trigger the same dialog; we'll handle batch in confirmBatchDelete
         _state.update { it.copy(pendingDelete = ImageEntry(id = "__batch__", fileName = "", prompt = "", model = "", type = "")) }
     }
 
@@ -140,11 +163,12 @@ class GalleryViewModel(
         return _state.value.pendingDelete?.id == "__batch__"
     }
 
-    /** 确认批量删除 */
+    /** 确认批量删除 — Bug #11 fix: use batch delete + loading state */
     fun confirmBatchDelete() {
         val ids = _state.value.selectedIds.toList()
-        _state.update { it.copy(pendingDelete = null, selectionMode = false, selectedIds = emptySet()) }
+        _state.update { it.copy(pendingDelete = null, selectionMode = false, selectedIds = emptySet(), isLoading = true) }
         viewModelScope.launch {
+            // Delete files and DB records in batch
             ids.forEach { id ->
                 repository.getEntryById(id)?.let { repository.deleteImage(it) }
             }
@@ -155,18 +179,85 @@ class GalleryViewModel(
     /** 批量收藏 */
     fun batchFavorite() {
         val ids = _state.value.selectedIds.toList()
-        _state.update { it.copy(selectionMode = false, selectedIds = emptySet()) }
+        _state.update { it.copy(selectionMode = false, selectedIds = emptySet(), isLoading = true) }
         viewModelScope.launch {
             ids.forEach { id -> repository.setFavorite(id, true) }
             loadImages()
         }
     }
 
-    // ==================== Display ====================
+    // ==================== Save ====================
 
-    /** 当前展示的图片列表（受搜索/筛选/排序影响） */
-    fun displayedImages(): List<ImageEntry> {
-        val s = _state.value
+    /** Consume the save result event (called by UI after showing toast) */
+    fun consumeSaveResult() {
+        _state.update { it.copy(saveResult = null) }
+    }
+
+    /** Bug #5 fix: correct saved flag logic + OOM protection. Bug #12 fix: emit event instead of Toast */
+    fun saveToDeviceGallery(entry: ImageEntry, context: Context) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                val file = repository.getLocalImagePath(entry)
+                if (!file.exists()) return@withContext SaveResult.Error("File not found")
+
+                try {
+                    // Decode with sampling to avoid OOM
+                    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(file.absolutePath, options)
+                    val maxDim = maxOf(options.outWidth, options.outHeight)
+                    var sampleSize = 1
+                    while (maxDim / (sampleSize * 2) >= 2048) sampleSize *= 2
+                    val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                    val bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+                        ?: return@withContext SaveResult.Error("Decode failed")
+
+                    val fileName = "GenBrush_${entry.timestamp}.jpg"
+                    var saved = false
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val contentValues = ContentValues().apply {
+                            put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                            put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/GenBrush")
+                        }
+                        val uri = context.contentResolver.insert(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            contentValues
+                        )
+                        uri?.let {
+                            context.contentResolver.openOutputStream(it)?.use { out ->
+                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                            }
+                            saved = true
+                        }
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Media.insertImage(
+                            context.contentResolver,
+                            bitmap,
+                            fileName,
+                            "Generated by GenBrush: ${entry.prompt}"
+                        )
+                        saved = true
+                    }
+                    bitmap.recycle()
+                    if (saved) SaveResult.Success else SaveResult.Error("Insert failed")
+                } catch (e: OutOfMemoryError) {
+                    SaveResult.Error("Out of memory")
+                } catch (e: Exception) {
+                    SaveResult.Error(e.message ?: "Unknown error")
+                }
+            }
+            _state.update { it.copy(saveResult = result) }
+        }
+    }
+
+    fun getLocalImagePath(entry: ImageEntry): File = repository.getLocalImagePath(entry)
+
+    // ==================== Display (Bug #7 fix: computed in state) ====================
+
+    /** Compute displayed images based on the given state */
+    private fun computeDisplayedImages(s: GalleryState): List<ImageEntry> {
         var list = s.images
 
         // 收藏筛选
@@ -196,52 +287,6 @@ class GalleryViewModel(
 
         return list
     }
-
-    fun saveToDeviceGallery(entry: ImageEntry, context: Context) {
-        viewModelScope.launch {
-            val saved = withContext(Dispatchers.IO) {
-                val file = repository.getLocalImagePath(entry)
-                if (!file.exists()) return@withContext false
-
-                val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return@withContext false
-                val fileName = "GenBrush_${entry.timestamp}.jpg"
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val contentValues = ContentValues().apply {
-                        put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
-                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/GenBrush")
-                    }
-                    val uri = context.contentResolver.insert(
-                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                        contentValues
-                    )
-                    uri?.let {
-                        context.contentResolver.openOutputStream(it)?.use { out ->
-                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
-                        }
-                    }
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Media.insertImage(
-                        context.contentResolver,
-                        bitmap,
-                        fileName,
-                        "由 GenBrush 生成：${entry.prompt}"
-                    )
-                }
-                bitmap.recycle()
-                true
-            }
-            if (saved) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, AppStrings.ZH.commonSaved, Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    fun getLocalImagePath(entry: ImageEntry): File = repository.getLocalImagePath(entry)
 
     companion object {
         fun factory(repository: GenerationRepository) =

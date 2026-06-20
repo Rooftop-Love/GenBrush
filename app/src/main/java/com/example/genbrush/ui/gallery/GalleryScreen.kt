@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +58,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,6 +94,22 @@ fun GalleryScreen(
         viewModel.loadImages()
     }
 
+    // Bug #12 fix: Observe saveResult and show toast in UI layer
+    val saveResult = state.saveResult
+    LaunchedEffect(saveResult) {
+        when (val r = saveResult) {
+            is SaveResult.Success -> {
+                Toast.makeText(context, s.commonSaved, Toast.LENGTH_SHORT).show()
+                viewModel.consumeSaveResult()
+            }
+            is SaveResult.Error -> {
+                Toast.makeText(context, s.errSaveFailed + r.message, Toast.LENGTH_SHORT).show()
+                viewModel.consumeSaveResult()
+            }
+            null -> { /* no-op */ }
+        }
+    }
+
     // Delete confirmation dialog (single or batch)
     state.pendingDelete?.let { pendingEntry ->
         val isBatch = viewModel.isBatchDeletePending()
@@ -120,7 +138,7 @@ fun GalleryScreen(
         )
     }
 
-    val displayedImages = viewModel.displayedImages()
+    val displayedImages = state.displayedImages
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Top bar: selection mode vs normal mode
@@ -185,6 +203,14 @@ fun GalleryScreen(
                             contentDescription = s.galleryShowFavorites,
                             tint = if (state.showFavoritesOnly) MaterialTheme.colorScheme.primary
                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // Enter selection mode
+                    IconButton(onClick = { viewModel.enterSelectionMode(null) }) {
+                        Icon(
+                            imageVector = Icons.Default.SelectAll,
+                            contentDescription = s.gallerySelectMode,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
@@ -277,7 +303,9 @@ fun GalleryScreen(
                 }
             }
         } else {
+            val gridState = rememberLazyGridState()
             LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Fixed(2),
                 contentPadding = PaddingValues(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -310,7 +338,7 @@ fun GalleryScreen(
                                     },
                                     onLongClick = {
                                         if (!state.selectionMode) {
-                                            viewModel.enterSelectionMode(entry.id)
+                                            showMenu = true
                                         }
                                     }
                                 ),
