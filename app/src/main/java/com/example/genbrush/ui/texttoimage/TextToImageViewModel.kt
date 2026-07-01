@@ -1,4 +1,4 @@
-﻿package com.example.genbrush.ui.texttoimage
+package com.example.genbrush.ui.texttoimage
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -8,7 +8,11 @@ import com.example.genbrush.data.remote.StableDiffusionApi
 import com.example.genbrush.data.remote.model.SdLoraInfo
 import com.example.genbrush.ui.common.mapError
 import com.example.genbrush.data.repository.GenerationRepository
+import com.example.genbrush.ui.components.SizeOption
 import com.example.genbrush.ui.components.getConfiguredGenerationModels
+import com.example.genbrush.ui.components.getSupportedSizes
+import com.example.genbrush.ui.localization.AppStrings
+import com.example.genbrush.ui.localization.resolveAppStrings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,7 +34,8 @@ data class TextToImageState(
     val isSdBackend: Boolean = false,
     val availableModels: List<String> = emptyList(),
     val availableLoras: List<SdLoraInfo> = emptyList(),
-    val selectedLoras: Map<String, Float> = emptyMap()
+    val selectedLoras: Map<String, Float> = emptyMap(),
+    val availableSizes: List<SizeOption> = emptyList()
 )
 
 class TextToImageViewModel(
@@ -46,12 +51,15 @@ class TextToImageViewModel(
         val isSd = prefs.backend == PreferencesManager.BACKEND_SD_WEBUI
         val models = if (!isSd) getConfiguredGenerationModels(prefs) else emptyList()
         val defaultModel = if (models.isNotEmpty() && prefs.defaultModel !in models) models.first() else prefs.defaultModel
+        val sizes = getSupportedSizes(defaultModel, isSd)
+        val safeSize = ensureSupportedSize(prefs.defaultSize, sizes)
         _state.update {
             it.copy(
                 selectedModel = defaultModel,
-                selectedSize = prefs.defaultSize,
+                selectedSize = safeSize,
                 isSdBackend = isSd,
-                availableModels = models
+                availableModels = models,
+                availableSizes = sizes
             )
         }
 
@@ -69,10 +77,14 @@ class TextToImageViewModel(
             sdApi.getModels(serverUrl).onSuccess { models ->
                 val modelNames = models.map { it.model_name }
                 if (modelNames.isNotEmpty()) {
+                    val sizes = getSupportedSizes(modelNames.first(), isSdBackend = true)
+                    val safeSize = ensureSupportedSize(_state.value.selectedSize, sizes)
                     _state.update {
                         it.copy(
                             availableModels = modelNames,
-                            selectedModel = modelNames.first()
+                            selectedModel = modelNames.first(),
+                            availableSizes = sizes,
+                            selectedSize = safeSize
                         )
                     }
                 }
@@ -100,12 +112,17 @@ class TextToImageViewModel(
             loadSdLoras()
         } else {
             val models = getConfiguredGenerationModels(prefs)
+            val selectedModel = if (prefs.defaultModel in models) prefs.defaultModel else models.firstOrNull() ?: ""
+            val sizes = getSupportedSizes(selectedModel, isSd)
+            val safeSize = ensureSupportedSize(_state.value.selectedSize, sizes)
             _state.update {
                 it.copy(
                     availableModels = models,
-                    selectedModel = if (prefs.defaultModel in models) prefs.defaultModel else models.firstOrNull() ?: "",
+                    selectedModel = selectedModel,
                     availableLoras = emptyList(),
-                    selectedLoras = emptyMap()
+                    selectedLoras = emptyMap(),
+                    availableSizes = sizes,
+                    selectedSize = safeSize
                 )
             }
         }
@@ -137,17 +154,28 @@ class TextToImageViewModel(
     }
 
     fun selectModel(model: String) {
-        _state.update { it.copy(selectedModel = model) }
+        val sizes = getSupportedSizes(model, _state.value.isSdBackend)
+        val safeSize = ensureSupportedSize(_state.value.selectedSize, sizes)
+        _state.update { it.copy(selectedModel = model, availableSizes = sizes, selectedSize = safeSize) }
     }
 
     fun selectSize(size: String) {
         _state.update { it.copy(selectedSize = size) }
     }
 
+    /**
+     * 确保当前选中尺寸在可用列表中；若不在则回退到列表首个选项。
+     */
+    private fun ensureSupportedSize(currentSize: String, sizes: List<SizeOption>): String {
+        if (sizes.isEmpty()) return currentSize
+        return if (sizes.any { it.value == currentSize }) currentSize else sizes.first().value
+    }
+
     fun generate() {
         val currentState = _state.value
+        val s = resolveAppStrings(prefs.language)
         if (currentState.prompt.isBlank()) {
-            _state.update { it.copy(error = "请输入提示词") }
+            _state.update { it.copy(error = s.errEnterPrompt) }
             return
         }
 
@@ -166,6 +194,7 @@ class TextToImageViewModel(
         }
 
         viewModelScope.launch {
+            val s = resolveAppStrings(prefs.language)
             val result = repository.generateTextToImage(
                 prompt = finalPrompt,
                 negativePrompt = currentState.negativePrompt,
@@ -187,7 +216,7 @@ class TextToImageViewModel(
                     _state.update {
                         it.copy(
                             isGenerating = false,
-                            error = mapError(e)
+                            error = mapError(e, s)
                         )
                     }
                 }

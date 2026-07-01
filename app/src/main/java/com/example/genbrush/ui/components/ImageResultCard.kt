@@ -1,12 +1,7 @@
 ﻿package com.example.genbrush.ui.components
 
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,15 +24,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import coil3.compose.AsyncImage
-import com.example.genbrush.ui.localization.AppStrings
+import com.example.genbrush.data.local.ImageSaver
 import com.example.genbrush.ui.localization.LocalStrings
+import kotlinx.coroutines.launch
 import java.io.File
 
 @Composable
@@ -52,6 +50,7 @@ fun ImageResultCard(
 ) {
     val context = LocalContext.current
     val s = LocalStrings.current
+    val scope = rememberCoroutineScope()
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -94,7 +93,16 @@ fun ImageResultCard(
                 horizontalArrangement = Arrangement.End
             ) {
                 OutlinedButton(
-                    onClick = { imageFile?.let { saveToGallery(context, it, s.resultSavedBy) } },
+                    onClick = {
+                        imageFile?.let {
+                            scope.launch {
+                                val result = ImageSaver.saveToGallery(context, it, s.resultSavedBy)
+                                if (result.isSuccess) {
+                                    Toast.makeText(context, s.commonSaved, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    },
                     enabled = imageFile != null
                 ) {
                     Icon(Icons.Default.Download, contentDescription = null)
@@ -113,37 +121,6 @@ fun ImageResultCard(
             }
         }
     }
-}
-
-private fun saveToGallery(context: Context, file: File, desc: String) {
-    val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return
-    val fileName = "GenBrush_${System.currentTimeMillis()}.jpg"
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val contentValues = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-            put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/GenBrush")
-        }
-        val uri = context.contentResolver.insert(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            contentValues
-        )
-        uri?.let {
-            context.contentResolver.openOutputStream(it)?.use { out ->
-                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
-            }
-        }
-    } else {
-        @Suppress("DEPRECATION")
-        MediaStore.Images.Media.insertImage(
-            context.contentResolver,
-            bitmap,
-            fileName,
-            desc
-        )
-    }
-    bitmap.recycle()
-    Toast.makeText(context, AppStrings.ZH.commonSaved, Toast.LENGTH_SHORT).show()
 }
 
 private fun shareImage(context: Context, file: File, title: String) {

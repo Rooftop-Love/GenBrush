@@ -180,6 +180,7 @@ data class AppStrings(
     val errContentSafety: String,
     val errNetwork: String,
     val errServer: String,
+    val errCleartext: String,
     val errUnknown: String,
     val errEnterPrompt: String,
     val errSelectImage: String,
@@ -190,9 +191,8 @@ data class AppStrings(
     val errNoImageGenerated: String,
     val errNoImageUrl: String,
     val errSaveFailed: String,
-    val errEditSaveFailed: String,
-    val errCannotOpen: String,
-    val errDecodeFailed: String
+    val errDecodeFailed: String,
+    val errGenerateFailed: String
 ) {
     companion object {
         val ZH = AppStrings(
@@ -340,6 +340,7 @@ data class AppStrings(
             errContentSafety = "内容安全审核未通过，请更换提示词重试。",
             errNetwork = "网络错误，请检查网络连接。",
             errServer = "服务器错误，请稍后重试。",
+            errCleartext = "网络安全限制，请确认服务器地址格式正确（http/https）。",
             errUnknown = "未知错误",
             errEnterPrompt = "请输入提示词",
             errSelectImage = "请选择一张图片",
@@ -350,9 +351,8 @@ data class AppStrings(
             errNoImageGenerated = "未生成图片，提示词可能被内容安全过滤器拦截。",
             errNoImageUrl = "响应中未包含图片",
             errSaveFailed = "保存图片失败：",
-            errEditSaveFailed = "保存编辑后的图片失败：",
-            errCannotOpen = "无法打开图片",
-            errDecodeFailed = "解码图片失败"
+            errDecodeFailed = "解码图片失败",
+            errGenerateFailed = "生成失败"
         )
 
         val EN = AppStrings(
@@ -500,6 +500,7 @@ data class AppStrings(
             errContentSafety = "Content safety check failed. Please try a different prompt.",
             errNetwork = "Network error. Please check your internet connection.",
             errServer = "Server error. Please try again later.",
+            errCleartext = "Network security restriction. Please confirm the server address format (http/https).",
             errUnknown = "Unknown error",
             errEnterPrompt = "Please enter a prompt",
             errSelectImage = "Please select an image",
@@ -510,9 +511,8 @@ data class AppStrings(
             errNoImageGenerated = "No images generated. The prompt may have been blocked by content safety filters.",
             errNoImageUrl = "No image URL in response",
             errSaveFailed = "Failed to save generated image: ",
-            errEditSaveFailed = "Failed to save edited image: ",
-            errCannotOpen = "Cannot open image",
-            errDecodeFailed = "Failed to decode image"
+            errDecodeFailed = "Failed to decode image",
+            errGenerateFailed = "Generation Failed"
         )
     }
 }

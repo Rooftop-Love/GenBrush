@@ -1,4 +1,4 @@
-﻿package com.example.genbrush.ui.settings
+package com.example.genbrush.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -7,6 +7,8 @@ import com.example.genbrush.data.local.PreferencesManager
 import com.example.genbrush.data.remote.StableDiffusionApi
 import com.example.genbrush.ui.components.PRESET_EDIT_MODELS
 import com.example.genbrush.ui.components.PRESET_GENERATION_MODELS
+import com.example.genbrush.ui.components.SizeOption
+import com.example.genbrush.ui.components.getSupportedSizes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,7 +57,10 @@ data class SettingsState(
     val showModelManagement: Boolean = false,
 
     // 折叠状态（默认全部展开）
-    val expandedSections: Set<String> = ALL_SECTIONS
+    val expandedSections: Set<String> = ALL_SECTIONS,
+
+    // 默认尺寸可选项（跟随默认模型变化）
+    val availableSizes: List<SizeOption> = emptyList()
 )
 
 class SettingsViewModel(
@@ -90,7 +95,9 @@ class SettingsViewModel(
         _state.value.expandedSections.contains(section)
 
     fun selectModel(model: String) {
-        _state.update { it.copy(defaultModel = model, saveSuccess = false) }
+        val sizes = getSupportedSizes(model, _state.value.backend == PreferencesManager.BACKEND_SD_WEBUI)
+        val safeSize = ensureSupportedSize(_state.value.defaultSize, sizes)
+        _state.update { it.copy(defaultModel = model, availableSizes = sizes, defaultSize = safeSize, saveSuccess = false) }
     }
 
     fun selectSize(size: String) {
@@ -102,7 +109,10 @@ class SettingsViewModel(
     }
 
     fun selectBackend(backend: String) {
-        _state.update { it.copy(backend = backend, saveSuccess = false) }
+        val isSd = backend == PreferencesManager.BACKEND_SD_WEBUI
+        val sizes = getSupportedSizes(_state.value.defaultModel, isSd)
+        val safeSize = ensureSupportedSize(_state.value.defaultSize, sizes)
+        _state.update { it.copy(backend = backend, availableSizes = sizes, defaultSize = safeSize, saveSuccess = false) }
     }
 
     fun updateSdServerUrl(url: String) {
@@ -259,20 +269,32 @@ class SettingsViewModel(
     }
 
     private fun load() {
+        val isSd = prefs.backend == PreferencesManager.BACKEND_SD_WEBUI
+        val sizes = getSupportedSizes(prefs.defaultModel, isSd)
+        val safeSize = ensureSupportedSize(prefs.defaultSize, sizes)
         _state.update {
             it.copy(
                 apiKey = prefs.apiKey,
                 defaultModel = prefs.defaultModel,
-                defaultSize = prefs.defaultSize,
+                defaultSize = safeSize,
                 language = prefs.language,
                 backend = prefs.backend,
                 sdServerUrl = prefs.sdServerUrl,
                 disabledGenerationModels = prefs.disabledGenerationModels,
                 disabledEditModels = prefs.disabledEditModels,
                 customGenerationModels = prefs.customGenerationModels,
-                customEditModels = prefs.customEditModels
+                customEditModels = prefs.customEditModels,
+                availableSizes = sizes
             )
         }
+    }
+
+    /**
+     * 确保当前选中尺寸在可用列表中；若不在则回退到列表首个选项。
+     */
+    private fun ensureSupportedSize(currentSize: String, sizes: List<SizeOption>): String {
+        if (sizes.isEmpty()) return currentSize
+        return if (sizes.any { it.value == currentSize }) currentSize else sizes.first().value
     }
 
     companion object {

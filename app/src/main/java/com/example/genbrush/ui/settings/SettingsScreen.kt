@@ -1,4 +1,4 @@
-﻿package com.example.genbrush.ui.settings
+package com.example.genbrush.ui.settings
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -525,7 +525,8 @@ fun SettingsScreen(
                 SizeSelector(
                     selectedSize = state.defaultSize,
                     onSizeSelected = viewModel::selectSize,
-                    label = s.settingsDefaultSize
+                    label = s.settingsDefaultSize,
+                    sizeOptions = state.availableSizes
                 )
             }
 

@@ -1,4 +1,4 @@
-﻿package com.example.genbrush.ui.imageedit
+package com.example.genbrush.ui.imageedit
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -27,17 +27,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -47,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.example.genbrush.ui.components.ErrorResultCard
 import com.example.genbrush.ui.components.ImageResultCard
 import com.example.genbrush.ui.components.LoadingOverlay
 import com.example.genbrush.ui.components.LoraSelector
@@ -59,7 +56,6 @@ import com.example.genbrush.ui.localization.LocalStrings
 fun ImageEditScreen(viewModel: ImageEditViewModel) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
     val s = LocalStrings.current
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -70,13 +66,6 @@ fun ImageEditScreen(viewModel: ImageEditViewModel) {
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshModels()
-    }
-
-    LaunchedEffect(state.error) {
-        state.error?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.dismissError()
-        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -190,7 +179,8 @@ fun ImageEditScreen(viewModel: ImageEditViewModel) {
             SizeSelector(
                 selectedSize = state.selectedSize,
                 onSizeSelected = viewModel::selectSize,
-                label = s.sizeLabel
+                label = s.sizeLabel,
+                sizeOptions = state.availableSizes
             )
 
             if (state.isSdBackend) {
@@ -225,9 +215,11 @@ fun ImageEditScreen(viewModel: ImageEditViewModel) {
                 )
             }
 
+            state.error?.let { errorMsg ->
+                ErrorResultCard(errorMessage = errorMsg)
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
         }
-
-        SnackbarHost(hostState = snackbarHostState)
     }
 }

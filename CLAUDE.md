@@ -54,4 +54,4 @@ On Windows, use `gradlew.bat` instead of `./gradlew`.
 
 - Build scripts use Kotlin DSL (`.gradle.kts`) with version catalog aliases from `libs.versions.toml`
 - Compose dependencies are managed via the Compose BOM — do not pin individual Compose library versions
-- ProGuard/R8 minification is enabled for release builds; keep rules in `app/proguard-rules.pro`
+- Release builds skip R8 minification (open-source project); `proguard-rules.pro` is retained but not active

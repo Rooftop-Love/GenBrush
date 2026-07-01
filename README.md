@@ -79,6 +79,7 @@ app/src/main/java/com/example/genbrush/
 │   ├── local/
 │   │   ├── db/                    # Room 数据库（AppDatabase、ImageDao、ImageEntity）
 │   │   ├── DataMigrationManager.kt # 数据导入/导出
+│   │   ├── ImageSaver.kt          # 保存图片到系统相册（OOM 保护）
 │   │   ├── ImageStore.kt          # 图片文件存储与管理
 │   │   └── PreferencesManager.kt  # 加密偏好设置
 │   ├── remote/

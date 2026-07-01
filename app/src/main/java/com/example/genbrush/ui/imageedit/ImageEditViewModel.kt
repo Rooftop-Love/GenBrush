@@ -1,4 +1,4 @@
-﻿package com.example.genbrush.ui.imageedit
+package com.example.genbrush.ui.imageedit
 
 import android.content.Context
 import android.net.Uri
@@ -10,7 +10,11 @@ import com.example.genbrush.data.remote.StableDiffusionApi
 import com.example.genbrush.data.remote.model.SdLoraInfo
 import com.example.genbrush.ui.common.mapError
 import com.example.genbrush.data.repository.GenerationRepository
+import com.example.genbrush.ui.components.SizeOption
 import com.example.genbrush.ui.components.getConfiguredEditModels
+import com.example.genbrush.ui.components.getSupportedSizes
+import com.example.genbrush.ui.localization.AppStrings
+import com.example.genbrush.ui.localization.resolveAppStrings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,7 +35,8 @@ data class ImageEditState(
     val isSdBackend: Boolean = false,
     val availableModels: List<String> = emptyList(),
     val availableLoras: List<SdLoraInfo> = emptyList(),
-    val selectedLoras: Map<String, Float> = emptyMap()
+    val selectedLoras: Map<String, Float> = emptyMap(),
+    val availableSizes: List<SizeOption> = emptyList()
 )
 
 class ImageEditViewModel(
@@ -47,7 +52,17 @@ class ImageEditViewModel(
         val isSd = prefs.backend == PreferencesManager.BACKEND_SD_WEBUI
         val models = if (!isSd) getConfiguredEditModels(prefs) else emptyList()
         val selectedModel = models.firstOrNull() ?: ""
-        _state.update { it.copy(isSdBackend = isSd, availableModels = models, selectedModel = selectedModel, selectedSize = prefs.defaultSize) }
+        val sizes = getSupportedSizes(selectedModel, isSd)
+        val safeSize = ensureSupportedSize(prefs.defaultSize, sizes)
+        _state.update {
+            it.copy(
+                isSdBackend = isSd,
+                availableModels = models,
+                selectedModel = selectedModel,
+                selectedSize = safeSize,
+                availableSizes = sizes
+            )
+        }
 
         if (isSd) {
             loadSdModels()
@@ -63,10 +78,14 @@ class ImageEditViewModel(
             sdApi.getModels(serverUrl).onSuccess { models ->
                 val modelNames = models.map { it.model_name }
                 if (modelNames.isNotEmpty()) {
+                    val sizes = getSupportedSizes(modelNames.first(), isSdBackend = true)
+                    val safeSize = ensureSupportedSize(_state.value.selectedSize, sizes)
                     _state.update {
                         it.copy(
                             availableModels = modelNames,
-                            selectedModel = modelNames.first()
+                            selectedModel = modelNames.first(),
+                            availableSizes = sizes,
+                            selectedSize = safeSize
                         )
                     }
                 }
@@ -94,12 +113,17 @@ class ImageEditViewModel(
             loadSdLoras()
         } else {
             val models = getConfiguredEditModels(prefs)
+            val selectedModel = models.firstOrNull() ?: ""
+            val sizes = getSupportedSizes(selectedModel, isSd)
+            val safeSize = ensureSupportedSize(_state.value.selectedSize, sizes)
             _state.update {
                 it.copy(
                     availableModels = models,
-                    selectedModel = models.firstOrNull() ?: "",
+                    selectedModel = selectedModel,
                     availableLoras = emptyList(),
-                    selectedLoras = emptyMap()
+                    selectedLoras = emptyMap(),
+                    availableSizes = sizes,
+                    selectedSize = safeSize
                 )
             }
         }
@@ -131,21 +155,32 @@ class ImageEditViewModel(
     }
 
     fun selectModel(model: String) {
-        _state.update { it.copy(selectedModel = model) }
+        val sizes = getSupportedSizes(model, _state.value.isSdBackend)
+        val safeSize = ensureSupportedSize(_state.value.selectedSize, sizes)
+        _state.update { it.copy(selectedModel = model, availableSizes = sizes, selectedSize = safeSize) }
     }
 
     fun selectSize(size: String) {
         _state.update { it.copy(selectedSize = size) }
     }
 
+    /**
+     * 确保当前选中尺寸在可用列表中；若不在则回退到列表首个选项。
+     */
+    private fun ensureSupportedSize(currentSize: String, sizes: List<SizeOption>): String {
+        if (sizes.isEmpty()) return currentSize
+        return if (sizes.any { it.value == currentSize }) currentSize else sizes.first().value
+    }
+
     fun generate(context: Context) {
         val currentState = _state.value
+        val s = resolveAppStrings(prefs.language)
         if (currentState.sourceImageUri == null) {
-            _state.update { it.copy(error = "请选择一张图片") }
+            _state.update { it.copy(error = s.errSelectImage) }
             return
         }
         if (currentState.prompt.isBlank()) {
-            _state.update { it.copy(error = "请输入编辑提示词") }
+            _state.update { it.copy(error = s.errEnterEditPrompt) }
             return
         }
 
@@ -184,7 +219,7 @@ class ImageEditViewModel(
                     _state.update {
                         it.copy(
                             isGenerating = false,
-                            error = mapError(e)
+                            error = mapError(e, s)
                         )
                     }
                 }

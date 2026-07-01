@@ -1,4 +1,4 @@
-﻿package com.example.genbrush.ui.texttoimage
+package com.example.genbrush.ui.texttoimage
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,20 +13,17 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.ui.unit.dp
+import com.example.genbrush.ui.components.ErrorResultCard
 import com.example.genbrush.ui.components.ImageResultCard
 import com.example.genbrush.ui.components.LoadingOverlay
 import com.example.genbrush.ui.components.LoraSelector
@@ -38,18 +35,10 @@ import com.example.genbrush.ui.localization.LocalStrings
 @Composable
 fun TextToImageScreen(viewModel: TextToImageViewModel) {
     val state by viewModel.state.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
     val s = LocalStrings.current
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshModels()
-    }
-
-    LaunchedEffect(state.error) {
-        state.error?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.dismissError()
-        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -98,7 +87,8 @@ fun TextToImageScreen(viewModel: TextToImageViewModel) {
             SizeSelector(
                 selectedSize = state.selectedSize,
                 onSizeSelected = viewModel::selectSize,
-                label = s.txt2imgSize
+                label = s.txt2imgSize,
+                sizeOptions = state.availableSizes
             )
 
             if (state.isSdBackend) {
@@ -133,9 +123,11 @@ fun TextToImageScreen(viewModel: TextToImageViewModel) {
                 )
             }
 
+            state.error?.let { errorMsg ->
+                ErrorResultCard(errorMessage = errorMsg)
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
         }
-
-        SnackbarHost(hostState = snackbarHostState)
     }
 }

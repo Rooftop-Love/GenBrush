@@ -1,4 +1,4 @@
-﻿package com.example.genbrush.data.local
+package com.example.genbrush.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -132,7 +132,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_CUSTOM_EDIT_MODELS = "custom_edit_models"
         private const val MODEL_SEP = "|||"
         const val DEFAULT_MODEL = "qwen-image-2.0-pro"
-        const val DEFAULT_SIZE = "1024*1024"
+        const val DEFAULT_SIZE = "2048*2048"
         const val DEFAULT_SD_URL = ""
         const val LANGUAGE_SYSTEM = "system"
         const val LANGUAGE_ZH = "zh"
